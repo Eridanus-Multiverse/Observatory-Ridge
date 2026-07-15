@@ -2,18 +2,20 @@ import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import GalaxyView from "../../src/galaxy-view/GalaxyView";
 import NearFocus2D from "../../src/near-focus-2d/NearFocus2D";
+import NearFocus3D from "../../src/near-focus-3d/NearFocus3D";
 import { demoGraph, demoSnapshot } from "./demo-data";
 
 const snapshot = demoSnapshot();
 const graph = demoGraph();
 
-type Tab = "galaxy" | "near2d";
+type Tab = "galaxy" | "near2d" | "near3d";
 
 function App() {
   const [tab, setTab] = useState<Tab>("galaxy");
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "galaxy", label: "Galaxy View" },
     { key: "near2d", label: "Near Focus 2D" },
+    { key: "near3d", label: "Near Focus 3D" },
   ];
   return (
     <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column", background: "#000", color: "#cdd8ea", fontFamily: "ui-monospace, monospace" }}>
@@ -39,7 +41,7 @@ function App() {
         </nav>
       </header>
       <main style={{ flex: 1, minHeight: 0 }}>
-        {tab === "galaxy" ? <GalaxyView graph={graph} /> : <NearFocus2D snapshot={snapshot} />}
+        {tab === "galaxy" ? <GalaxyView graph={graph} /> : tab === "near2d" ? <NearFocus2D snapshot={snapshot} /> : <NearFocus3D snapshot={snapshot} />}
       </main>
     </div>
   );

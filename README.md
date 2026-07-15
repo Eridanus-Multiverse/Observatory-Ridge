@@ -19,11 +19,11 @@ views of the same knowledge base:
 The visualizations consume plain JSON. They do not own a database, call a
 private API, or decide how an application authenticates its users.
 
-> **Development status:** the public data contract, deterministic visual hash,
-> and Solar System preset are available in the current scaffold. The three
-> visualization packages and runnable demo are still being extracted. The
-> component paths and demo commands documented as planned below are not part of
-> a usable release yet.
+> **Development status:** data contract, hardened hash, Solar System preset,
+> Galaxy View, Near Focus 2D, and the runnable demo are in the tree. Near
+> Focus 3D ships as a preview subset (star shader with seam-safe halo, orbit
+> layout, belt, satellites); bloom post-processing, camera-follow navigation,
+> and per-planet surface shaders are still upstream and on the roadmap.
 
 ## Design principles
 
@@ -79,10 +79,10 @@ should produce the same scene until the data changes.
 | --- | --- | --- |
 | `src/core` | Available | Shared TypeScript data contracts and deterministic visual utilities. |
 | `src/presets` | Available | Generic snapshots and themes, including the Solar System preset. |
-| `src/near-focus-3d` | Planned | React Three Fiber star-system view, navigation, picking, and detail events. |
-| `src/near-focus-2d` | Planned | SVG system map with the same selection semantics and data model. |
-| `src/galaxy-view` | Planned | Community detection, force layout, graph rendering, and picking. |
-| `demo` | Planned | Vite application with generated data and configurable themes. |
+| `src/near-focus-3d` | Preview | React Three Fiber star-system view, navigation, picking, and detail events. |
+| `src/near-focus-2d` | Available | SVG system map with the same selection semantics and data model. |
+| `src/galaxy-view` | Available | Community detection, force layout, graph rendering, and picking. |
+| `demo` | Available | Vite application with generated data and configurable themes. |
 
 The 2D and 3D near-focus views are peers, not separate products. They should
 accept the same `RidgeSnapshot`, preserve the same selected entity, and expose
