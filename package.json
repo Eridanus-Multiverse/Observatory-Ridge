@@ -1,0 +1,33 @@
+{
+  "name": "observatory-ridge",
+  "version": "0.1.0",
+  "description": "Turn your notes and memories into an explorable star system — 3D near-focus galaxy, 2D orrery chart, and a community-clustered Galaxy View.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "demo": "vite demo",
+    "build": "vite build demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "three": ">=0.160",
+    "@react-three/fiber": ">=8",
+    "@react-three/drei": ">=9"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "three": "^0.168.0",
+    "@react-three/fiber": "^8.17.0",
+    "@react-three/drei": "^9.112.0",
+    "@types/react": "^18.3.0",
+    "@types/three": "^0.168.0"
+  },
+  "keywords": ["knowledge-graph", "visualization", "three", "react", "galaxy", "memory", "star-map", "obsidian"]
+}
