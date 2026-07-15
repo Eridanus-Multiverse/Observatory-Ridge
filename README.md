@@ -12,7 +12,7 @@ could have grown.
 Observatory Ridge is a backend-agnostic visualization toolkit for three related
 views of the same knowledge base:
 
-- **Near Focus 3D**: a navigable star, planet, satellite, and asteroid system.
+- **Near Focus 3D**: a navigable star-and-planet system with satellite and asteroid context.
 - **Near Focus 2D**: an SVG system map for lower-power devices and compact layouts.
 - **Galaxy View**: a community-colored, force-balanced memory graph.
 
@@ -22,8 +22,9 @@ private API, or decide how an application authenticates its users.
 > **Development status:** data contract, hardened hash, Solar System preset,
 > Galaxy View, Near Focus 2D, and the runnable demo are in the tree. Near
 > Focus 3D ships as a preview subset (star shader with seam-safe halo, orbit
-> layout, belt, satellites); bloom post-processing, camera-follow navigation,
-> and per-planet surface shaders are still upstream and on the roadmap.
+> layout, star/planet picking, visual-only belt and satellites); bloom
+> post-processing, camera-follow navigation, belt/satellite detail events, and
+> per-planet surface shaders are still upstream and on the roadmap.
 
 ## Design principles
 
@@ -64,7 +65,8 @@ A useful galaxy cannot be only attractive. It must remain readable when hubs,
 isolated notes, and dense communities coexist. The target layout combines:
 
 - deterministic positions near golden-angle community anchors;
-- pair repulsion to prevent node collapse;
+- pair repulsion to prevent node collapse (exact on small graphs, deterministic
+  bounded sampling on larger graphs);
 - weighted springs for connected memories;
 - degree-normalized spring strength so hubs do not absorb all force;
 - a community pull plus a weaker global centering force; and
@@ -79,14 +81,15 @@ should produce the same scene until the data changes.
 | --- | --- | --- |
 | `src/core` | Available | Shared TypeScript data contracts and deterministic visual utilities. |
 | `src/presets` | Available | Generic snapshots and themes, including the Solar System preset. |
-| `src/near-focus-3d` | Preview | React Three Fiber star-system view, navigation, picking, and detail events. |
+| `src/near-focus-3d` | Preview | React Three Fiber star-system view with navigation and star/planet detail events; belt and satellites are visual-only. |
 | `src/near-focus-2d` | Available | SVG system map with the same selection semantics and data model. |
 | `src/galaxy-view` | Available | Community detection, force layout, graph rendering, and picking. |
 | `demo` | Available | Vite application with generated data and configurable themes. |
 
 The 2D and 3D near-focus views are peers, not separate products. They should
-accept the same `RidgeSnapshot`, preserve the same selected entity, and expose
-equivalent interaction events wherever the platform permits.
+accept the same `RidgeSnapshot` and expose equivalent star/planet event payloads
+wherever the platform permits. Selection is currently uncontrolled; a host that
+switches views must preserve its own selected entity if continuity is required.
 
 ## Data contract
 
@@ -224,7 +227,7 @@ The bundled `SOLAR_STAR_THEME`, `BLUE_STAR_THEME`, and
 
 ## Install and use
 
-Requirements: Node 18+ and npm. Everything else installs locally.
+Requirements: Node 20.19+ and npm. Everything else installs locally.
 
 ```bash
 cd Observatory-Ridge
@@ -236,20 +239,27 @@ Other commands:
 
 ```bash
 npm run typecheck  # TypeScript contract and component checks
-npm run build      # production demo build
+npm test           # deterministic layout and SVG/SSR regression tests
+npm run build      # production library + demo builds
+npm run verify:package  # inspect the publish tarball and import its built entry
 ```
 
 To embed the components in your own React app, install the peer dependencies
 (`react`, `react-dom`, `three`, `@react-three/fiber`, `@react-three/drei` —
-exact ranges in `package.json`) and import from `src/`:
+exact ranges in `package.json`) and import from the package root:
 
 ```tsx
-import GalaxyView from "observatory-ridge/src/galaxy-view/GalaxyView";
-import NearFocus2D from "observatory-ridge/src/near-focus-2d/NearFocus2D";
+import { GalaxyView, NearFocus2D, NearFocus3D } from "observatory-ridge";
 
 <GalaxyView graph={yourGraph} />
 <NearFocus2D snapshot={yourSnapshot} />
+<NearFocus3D snapshot={yourSnapshot} />
 ```
+
+`NearFocus2D.palette` accepts `#RRGGBB` colors and falls back to its built-in
+wheel when the array is empty. `GalaxyView.dustPerNode` is normalized to an
+integer from 0 through 32 so malformed display configuration cannot trigger an
+unbounded typed-array allocation.
 
 No plugins, no build-time codegen, no service dependencies — the components
 render whatever JSON you hand them.

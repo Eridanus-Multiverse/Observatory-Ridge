@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import type { RidgeMemory, RidgePlanet, RidgeSnapshot } from "../core/types";
-import { hash01, GOLDEN_ANGLE } from "../core/hash";
+import { useEffect, useId, useMemo, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import type { RidgeMemory, RidgePlanet, RidgeSnapshot } from "../core/types.js";
+import { hash01, GOLDEN_ANGLE } from "../core/hash.js";
 
 /**
  * Near Focus 2D — an SVG star-system chart.
@@ -18,8 +19,20 @@ export interface NearFocus2DProps {
   palette?: string[];
   background?: string;
   fontFamily?: string;
-  onSelect?: (selection: { kind: "star" | "planet" | "belt"; planet?: RidgePlanet } | null) => void;
+  onSelect?: (selection: NearFocus2DSelection) => void;
 }
+
+export type NearFocus2DSelection =
+  | { kind: "star" }
+  | { kind: "belt" }
+  | { kind: "planet"; planet: RidgePlanet }
+  | null;
+
+type InternalSelection =
+  | { kind: "star" }
+  | { kind: "belt" }
+  | { kind: "planet"; id: string }
+  | null;
 
 const CANDY_WHEEL = [
   "#ff6d8a", "#ffb26b", "#ffd166", "#c5e05a", "#6fe6a3", "#3ed3ff",
@@ -76,23 +89,30 @@ const DUST_FIELD = (() => {
 })();
 
 function useClock(fps = 30, active = true) {
-  const [, setFrame] = useState(0);
+  const [now, setNow] = useState(0);
   useEffect(() => {
-    if (!active) return;
+    if (!active || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     let raf = 0;
     let last = 0;
     const loop = (t: number) => {
-      if (t - last > 1000 / fps) {
+      if (document.visibilityState !== "hidden" && t - last > 1000 / fps) {
         last = t;
-        setFrame((v) => (v + 1) % 100000);
+        setNow(t);
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [fps, active]);
-  return typeof performance !== "undefined" ? performance.now() : 0;
+  return now;
 }
+
+const onActivate = (event: ReactKeyboardEvent, action: () => void) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    action();
+  }
+};
 
 export default function NearFocus2D({
   snapshot,
@@ -102,27 +122,44 @@ export default function NearFocus2D({
   onSelect,
 }: NearFocus2DProps) {
   const clockTick = useClock(30, true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<InternalSelection>(null);
+  const instanceId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const id = (suffix: string) => `or2d-${instanceId}-${suffix}`;
+  const resolvedPalette = useMemo(() => {
+    if (!palette.length) return CANDY_WHEEL;
+    return palette.map((color, index) => (
+      /^#[0-9a-f]{6}$/i.test(color) ? color : CANDY_WHEEL[index % CANDY_WHEEL.length]
+    ));
+  }, [palette]);
   const t = clockTick / 1000;
   const flare = (Math.sin(t * 0.7) + 1) / 2;
   const { centerX: CX, centerY: CY } = LAYOUT;
 
   const planets = useMemo(() => {
-    const ranked = [...snapshot.planets].sort((a, b) => a.rank - b.rank);
-    const maxCount = Math.max(1, ...ranked.map((p) => p.memoryCount));
+    const ranked = [...snapshot.planets].sort((a, b) => {
+      const rankA = Number.isFinite(a.rank) ? a.rank : Number.MAX_SAFE_INTEGER;
+      const rankB = Number.isFinite(b.rank) ? b.rank : Number.MAX_SAFE_INTEGER;
+      return rankA - rankB || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    });
+    const countOf = (planet: RidgePlanet) => (
+      Number.isFinite(planet.memoryCount) ? Math.max(0, planet.memoryCount) : 0
+    );
+    const maxCount = Math.max(1, ...ranked.map(countOf));
     return ranked.map((planet, i) => {
       const rx = orbitRadius(i, ranked.length);
+      const memoryCount = countOf(planet);
       return {
         planet,
+        memoryCount,
         orbit: i,
         rx,
-        color: palette[i % palette.length],
-        r: 3.2 + Math.min((planet.memoryCount / maxCount) * 3, 3),
+        color: resolvedPalette[i % resolvedPalette.length],
+        r: 3.2 + Math.min((memoryCount / maxCount) * 3, 3),
         phase: hash01(planet.id, 17) * Math.PI * 2 + i * GOLDEN_ANGLE,
         speed: 15 / Math.pow(rx, 1.5),
       };
     });
-  }, [snapshot, palette]);
+  }, [snapshot.planets, resolvedPalette]);
 
   // Belt: real unattributed memories plus decorative filler so the ring reads
   // as a band even with sparse data.
@@ -153,21 +190,30 @@ export default function NearFocus2D({
     </g>
   ), []);
 
-  const starSelected = selectedId === "star";
-  const beltSelected = selectedId === "belt";
-  const selectedPlanet = planets.find((p) => p.planet.id === selectedId) || null;
+  const starSelected = selection?.kind === "star";
+  const beltSelected = selection?.kind === "belt";
+  const selectedPlanet = selection?.kind === "planet"
+    ? planets.find((p) => p.planet.id === selection.id) || null
+    : null;
 
-  const select = (next: string | null) => {
-    setSelectedId(next);
+  const select = (next: InternalSelection) => {
+    setSelection(next);
     if (!onSelect) return;
     if (next === null) onSelect(null);
-    else if (next === "star") onSelect({ kind: "star" });
-    else if (next === "belt") onSelect({ kind: "belt" });
+    else if (next.kind === "star") onSelect({ kind: "star" });
+    else if (next.kind === "belt") onSelect({ kind: "belt" });
     else {
-      const hit = planets.find((p) => p.planet.id === next);
+      const hit = planets.find((p) => p.planet.id === next.id);
       if (hit) onSelect({ kind: "planet", planet: hit.planet });
     }
   };
+
+  useEffect(() => {
+    if (selection?.kind === "planet" && !selectedPlanet) {
+      setSelection(null);
+      onSelect?.(null);
+    }
+  }, [onSelect, selectedPlanet, selection]);
 
   const memoryDate = (m: RidgeMemory) => m.date || "";
 
@@ -180,31 +226,39 @@ export default function NearFocus2D({
           viewBox={`${LAYOUT.viewMinX} ${LAYOUT.viewMinY} ${LAYOUT.viewWidth} ${LAYOUT.viewHeight}`}
           style={{ display: "block" }}
           onClick={() => select(null)}
+          onKeyDown={(event) => { if (event.key === "Escape") select(null); }}
+          role="group"
+          aria-label="Interactive memory star system"
         >
+          <style>{`
+            .or2d-interactive { outline: none; }
+            .or2d-keyboard-focus { opacity: 0; pointer-events: none; }
+            .or2d-interactive:focus-visible .or2d-keyboard-focus { opacity: 0.9; }
+          `}</style>
           <defs>
-            <radialGradient id="or2d-sun" cx="50%" cy="50%" r="50%">
+            <radialGradient id={id("sun")} cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
               <stop offset="25%" stopColor="#fff5d4" stopOpacity="0.95" />
               <stop offset="50%" stopColor="#ffc24a" stopOpacity="0.7" />
               <stop offset="75%" stopColor="#f4511e" stopOpacity="0.35" />
               <stop offset="100%" stopColor="#7a2503" stopOpacity="0" />
             </radialGradient>
-            <radialGradient id="or2d-corona" cx="50%" cy="50%" r="50%">
+            <radialGradient id={id("corona")} cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#ffd77a" stopOpacity="0.25" />
               <stop offset="100%" stopColor="#ffd77a" stopOpacity="0" />
             </radialGradient>
             {/* PITFALL: default SVG filter regions clip wide blurs into boxes. */}
-            <filter id="or2d-blur-lg" x="-70%" y="-70%" width="240%" height="240%">
+            <filter id={id("blur-lg")} x="-70%" y="-70%" width="240%" height="240%">
               <feGaussianBlur stdDeviation="5" />
             </filter>
-            <filter id="or2d-blur-sm" x="-70%" y="-70%" width="240%" height="240%">
+            <filter id={id("blur-sm")} x="-70%" y="-70%" width="240%" height="240%">
               <feGaussianBlur stdDeviation="2.5" />
             </filter>
             {/* Glowing-orb planet gradient: white-hot core, solid color body,
                 only the outer rim melts away. Mid-gradient opacity steps read
                 as plastic bands — keep the falloff continuous. */}
             {planets.map(({ planet, orbit, color }) => (
-              <radialGradient key={`pg-${planet.id}`} id={`or2d-pg-${orbit}`} cx="50%" cy="50%" r="50%">
+              <radialGradient key={`pg-${planet.id}`} id={id(`pg-${orbit}`)} cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#ffffff" />
                 <stop offset="26%" stopColor="#ffffff" />
                 <stop offset="44%" stopColor={mixHex(color, "#ffffff", 0.2)} />
@@ -219,7 +273,7 @@ export default function NearFocus2D({
 
           {/* Orbits: sparse dotted circles; a selected orbit becomes solid. */}
           {planets.map(({ planet, rx }) => {
-            const isSelected = planet.id === selectedId;
+            const isSelected = selection?.kind === "planet" && planet.id === selection.id;
             return (
               <circle
                 key={`orbit-${planet.id}`}
@@ -240,31 +294,46 @@ export default function NearFocus2D({
               <circle key={`dust-${i}`} cx={dot.x} cy={dot.y} r={beltSelected ? dot.r * 1.25 : dot.r} fill={dot.color} opacity={beltSelected ? Math.min(1, dot.opacity * 2) : dot.opacity} />
             ))}
           </g>
-          <circle
-            cx={CX} cy={CY} r={(LAYOUT.beltInner + LAYOUT.beltOuter) / 2}
-            fill="none" stroke="rgba(0,0,0,0)"
-            strokeWidth={LAYOUT.beltOuter - LAYOUT.beltInner + 8}
-            pointerEvents="stroke"
-            style={{ cursor: "pointer" }}
-            onClick={(e) => { e.stopPropagation(); select(beltSelected ? null : "belt"); }}
-          />
-          {beltSelected && (
-            <g pointerEvents="none">
-              <circle cx={CX} cy={CY} r={LAYOUT.beltInner - 2.5} fill="none" stroke="rgba(255,216,146,0.5)" strokeWidth={0.7} strokeDasharray="3 4" />
-              <circle cx={CX} cy={CY} r={LAYOUT.beltOuter + 2.5} fill="none" stroke="rgba(255,216,146,0.5)" strokeWidth={0.7} strokeDasharray="3 4" />
-            </g>
-          )}
-
-          {/* Sun. */}
-          <circle pointerEvents="none" cx={CX} cy={CY} r={92 + flare * 10} fill="url(#or2d-corona)" opacity={0.55} />
-          <circle pointerEvents="none" cx={CX} cy={CY} r={58 + flare * 8} fill="url(#or2d-corona)" />
           <g
-            onClick={(e) => { e.stopPropagation(); select(starSelected ? null : "star"); }}
+            className="or2d-interactive"
+            role="button"
+            tabIndex={0}
+            aria-label={`Asteroid belt, ${snapshot.asteroids.length} memories`}
+            onKeyDown={(event) => onActivate(event, () => select(beltSelected ? null : { kind: "belt" }))}
+            onClick={(e) => { e.stopPropagation(); select(beltSelected ? null : { kind: "belt" }); }}
             style={{ cursor: "pointer" }}
           >
-            <circle cx={CX} cy={CY} r={32} fill="url(#or2d-sun)" />
-            <circle cx={CX} cy={CY} r={20 + flare * 4} fill="#fff8e1" opacity={0.35} filter="url(#or2d-blur-lg)" />
-            <circle cx={CX} cy={CY} r={12 + flare * 2} fill="#fff" opacity={0.8} filter="url(#or2d-blur-sm)" />
+            <circle
+              cx={CX} cy={CY} r={(LAYOUT.beltInner + LAYOUT.beltOuter) / 2}
+              fill="none" stroke="rgba(0,0,0,0)"
+              strokeWidth={LAYOUT.beltOuter - LAYOUT.beltInner + 8}
+              pointerEvents="stroke"
+            />
+            <circle className="or2d-keyboard-focus" cx={CX} cy={CY} r={(LAYOUT.beltInner + LAYOUT.beltOuter) / 2} fill="none" stroke="#d9e8ff" strokeWidth={1} strokeDasharray="3 4" />
+            {beltSelected && (
+              <g pointerEvents="none">
+                <circle cx={CX} cy={CY} r={LAYOUT.beltInner - 2.5} fill="none" stroke="rgba(255,216,146,0.5)" strokeWidth={0.7} strokeDasharray="3 4" />
+                <circle cx={CX} cy={CY} r={LAYOUT.beltOuter + 2.5} fill="none" stroke="rgba(255,216,146,0.5)" strokeWidth={0.7} strokeDasharray="3 4" />
+              </g>
+            )}
+          </g>
+
+          {/* Sun. */}
+          <circle pointerEvents="none" cx={CX} cy={CY} r={92 + flare * 10} fill={`url(#${id("corona")})`} opacity={0.55} />
+          <circle pointerEvents="none" cx={CX} cy={CY} r={58 + flare * 8} fill={`url(#${id("corona")})`} />
+          <g
+            className="or2d-interactive"
+            role="button"
+            tabIndex={0}
+            aria-label={`Star ${snapshot.star.name}`}
+            onKeyDown={(event) => onActivate(event, () => select(starSelected ? null : { kind: "star" }))}
+            onClick={(e) => { e.stopPropagation(); select(starSelected ? null : { kind: "star" }); }}
+            style={{ cursor: "pointer" }}
+          >
+            <circle cx={CX} cy={CY} r={32} fill={`url(#${id("sun")})`} />
+            <circle cx={CX} cy={CY} r={20 + flare * 4} fill="#fff8e1" opacity={0.35} filter={`url(#${id("blur-lg")})`} />
+            <circle cx={CX} cy={CY} r={12 + flare * 2} fill="#fff" opacity={0.8} filter={`url(#${id("blur-sm")})`} />
+            <circle className="or2d-keyboard-focus" cx={CX} cy={CY} r={39} fill="none" stroke="#d9e8ff" strokeWidth={1} strokeDasharray="3 4" />
             {starSelected && (
               <circle cx={CX} cy={CY} r={37} fill="none" stroke="#d9e8ff" strokeWidth={0.8} strokeDasharray="3 4" opacity={0.85} />
             )}
@@ -275,17 +344,23 @@ export default function NearFocus2D({
             const angle = phase + t * speed;
             const sx = CX + Math.cos(angle) * rx;
             const sy = CY + Math.sin(angle) * rx;
-            const isSelected = planet.id === selectedId;
+            const isSelected = selection?.kind === "planet" && planet.id === selection.id;
             return (
               <g
                 key={planet.id}
-                onClick={(e) => { e.stopPropagation(); select(isSelected ? null : planet.id); }}
+                className="or2d-interactive"
+                role="button"
+                tabIndex={0}
+                aria-label={`${planet.name}, ${Number.isFinite(planet.memoryCount) ? Math.max(0, planet.memoryCount) : 0} memories`}
+                onKeyDown={(event) => onActivate(event, () => select(isSelected ? null : { kind: "planet", id: planet.id }))}
+                onClick={(e) => { e.stopPropagation(); select(isSelected ? null : { kind: "planet", id: planet.id }); }}
                 style={{ cursor: "pointer" }}
               >
                 <circle cx={sx} cy={sy} r={15} fill="rgba(0,0,0,0)" />
+                <circle className="or2d-keyboard-focus" cx={sx} cy={sy} r={r + 5} fill="none" stroke="#d9e8ff" strokeWidth={0.9} strokeDasharray="2.5 3" />
                 <circle
                   cx={sx} cy={sy} r={r * 1.5}
-                  fill={`url(#or2d-pg-${orbit})`}
+                  fill={`url(#${id(`pg-${orbit}`)})`}
                   opacity={0.95 + Math.sin(clockTick * 0.0018 + phase * 7) * 0.05}
                 />
                 {isSelected && (
@@ -304,13 +379,13 @@ export default function NearFocus2D({
       </div>
 
       {/* Detail card. */}
-      <div style={{ borderTop: "1px solid rgba(255,223,146,0.12)", background: "rgba(2,4,8,0.9)", padding: "8px 14px 10px", minHeight: 72, color: "#cdd8ea", fontSize: 11 }}>
+      <div aria-live="polite" style={{ borderTop: "1px solid rgba(255,223,146,0.12)", background: "rgba(2,4,8,0.9)", padding: "8px 14px 10px", minHeight: 72, color: "#cdd8ea", fontSize: 11 }}>
         {selectedPlanet ? (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <span style={{ width: 6, height: 14, background: selectedPlanet.color, display: "inline-block" }} />
               <span style={{ color: "#efede6", fontSize: 12 }}>{selectedPlanet.planet.name}</span>
-              <span style={{ marginLeft: "auto", opacity: 0.55, fontSize: 9 }}>{selectedPlanet.planet.memoryCount} memories</span>
+              <span style={{ marginLeft: "auto", opacity: 0.55, fontSize: 9 }}>{selectedPlanet.memoryCount} memories</span>
             </div>
             {selectedPlanet.planet.definition && (
               <div style={{ marginTop: 5, opacity: 0.8, lineHeight: 1.5 }}>{selectedPlanet.planet.definition}</div>

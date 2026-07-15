@@ -64,7 +64,14 @@ export function demoGraph(): RidgeGraph {
       });
     }
   }
-  const edges: RidgeGraph["edges"] = [];
+  const edgeMap = new Map<string, RidgeGraph["edges"][number]>();
+  const addEdge = (source: string, target: string, weight: number) => {
+    if (source === target) return;
+    const [a, b] = source < target ? [source, target] : [target, source];
+    const key = `${a}\u0000${b}`;
+    const previous = edgeMap.get(key);
+    if (!previous || weight > (previous.weight ?? 0)) edgeMap.set(key, { source: a, target: b, weight });
+  };
   const byCategory = new Map<string, RidgeMemory[]>();
   for (const n of nodes) {
     if (!byCategory.has(n.category!)) byCategory.set(n.category!, []);
@@ -76,14 +83,15 @@ export function demoGraph(): RidgeGraph {
       const links = 1 + Math.floor(hash01(list[i].id, 41) * 3);
       for (let k = 0; k < links; k += 1) {
         const j = Math.floor(hash01(list[i].id, 47 + k * 7) * list.length);
-        if (j !== i) edges.push({ source: list[i].id, target: list[j].id, weight: 0.35 + hash01(list[i].id, 53 + k) * 0.5 });
+        if (j !== i) addEdge(list[i].id, list[j].id, 0.35 + hash01(list[i].id, 53 + k) * 0.5);
       }
     }
   }
   for (let b = 0; b < 40; b += 1) {
     const i = Math.floor(hash01(`bridge-${b}`, 3) * nodes.length);
-    const j = Math.floor(hash01(`bridge-${b}`, 11) * nodes.length);
-    if (i !== j) edges.push({ source: nodes[i].id, target: nodes[j].id, weight: 0.25 });
+    let j = Math.floor(hash01(`bridge-${b}`, 11) * nodes.length);
+    if (nodes[i].category === nodes[j].category) j = (j + 60 + (b % 5) * 60) % nodes.length;
+    addEdge(nodes[i].id, nodes[j].id, 0.25);
   }
-  return { nodes, edges };
+  return { nodes, edges: [...edgeMap.values()] };
 }

@@ -1,2 +1,5 @@
 node_modules/
 demo/dist/
+/dist/
+.pack-smoke-*/
+observatory-ridge-*.tgz

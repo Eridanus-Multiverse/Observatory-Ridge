@@ -4,11 +4,33 @@
   "description": "Turn your notes and memories into an explorable star system — 3D near-focus galaxy, 2D orrery chart, and a community-clustered Galaxy View.",
   "license": "MIT",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "./dist/observatory-ridge.js",
+  "module": "./dist/observatory-ridge.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/observatory-ridge.js",
+      "default": "./dist/observatory-ridge.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "demo": "vite demo",
-    "build": "vite build demo",
-    "typecheck": "tsc --noEmit"
+    "build": "npm run build:lib && npm run build:demo",
+    "build:lib": "vite build && tsc -p tsconfig.build.json",
+    "build:demo": "vite build demo",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify:package": "node scripts/verify-package.mjs",
+    "prepack": "npm run build:lib"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   },
   "peerDependencies": {
     "@react-three/drei": ">=9",
@@ -23,12 +45,13 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.7",
     "@types/three": "^0.168.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^6.0.3",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "three": "^0.168.0",
     "typescript": "^5.5.0",
-    "vite": "^5.4.0"
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   },
   "keywords": [
     "knowledge-graph",

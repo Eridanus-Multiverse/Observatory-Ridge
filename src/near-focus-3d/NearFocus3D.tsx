@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Billboard, Html, Line, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import type { RidgePlanet, RidgeSnapshot, RidgeStarTheme } from "../core/types";
-import { hash01, GOLDEN_ANGLE } from "../core/hash";
-import { SOLAR_STAR_THEME } from "../presets/solar-system";
+import type { RidgePlanet, RidgeSnapshot, RidgeStarTheme } from "../core/types.js";
+import { hash01, GOLDEN_ANGLE } from "../core/hash.js";
+import { SOLAR_STAR_THEME } from "../presets/solar-system.js";
 
 /**
  * Near Focus 3D — a navigable star system.
@@ -22,9 +22,16 @@ import { SOLAR_STAR_THEME } from "../presets/solar-system";
 export interface NearFocus3DProps {
   snapshot: RidgeSnapshot;
   theme?: RidgeStarTheme;
-  onSelect?: (selection: { kind: "star" | "planet"; planet?: RidgePlanet } | null) => void;
+  onSelect?: (selection: NearFocus3DSelection) => void;
   fontFamily?: string;
 }
+
+export type NearFocus3DSelection =
+  | { kind: "star" }
+  | { kind: "planet"; planet: RidgePlanet }
+  | null;
+
+type InternalSelection = { kind: "star" } | { kind: "planet"; id: string } | null;
 
 const ARCHETYPE_COLORS: Record<string, string> = {
   rocky: "#b08a5e",
@@ -125,6 +132,7 @@ const HALO_FRAGMENT = /* glsl */ `
 
 interface PlanetLayout {
   planet: RidgePlanet;
+  memoryCount: number;
   radius: number;
   size: number;
   phase: number;
@@ -134,18 +142,26 @@ interface PlanetLayout {
 }
 
 function layoutPlanets(planets: RidgePlanet[]): { rows: PlanetLayout[]; outerEdge: number } {
-  const ranked = [...planets].sort((a, b) => a.rank - b.rank);
-  const maxCount = Math.max(1, ...ranked.map((p) => p.memoryCount));
+  const ranked = [...planets].sort((a, b) => {
+    const rankA = Number.isFinite(a.rank) ? a.rank : Number.MAX_SAFE_INTEGER;
+    const rankB = Number.isFinite(b.rank) ? b.rank : Number.MAX_SAFE_INTEGER;
+    return rankA - rankB || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  });
+  const memoryCount = (planet: RidgePlanet) => (
+    Number.isFinite(planet.memoryCount) ? Math.max(0, planet.memoryCount) : 0
+  );
+  const maxCount = Math.max(1, ...ranked.map(memoryCount));
   let cursor = 4.3;
   let previousFootprint = 0;
   const rows = ranked.map((planet, i) => {
-    const size = 0.34 + Math.min(planet.memoryCount / maxCount, 1) * 0.5;
+    const size = 0.34 + Math.min(memoryCount(planet) / maxCount, 1) * 0.5;
     const footprint = size * 1.6 + 0.08;
     const radius = cursor + (previousFootprint > 0 ? Math.max(previousFootprint, footprint) + 0.58 : footprint);
     cursor = radius;
     previousFootprint = footprint;
     return {
       planet,
+      memoryCount: memoryCount(planet),
       radius,
       size,
       phase: i * GOLDEN_ANGLE + hash01(planet.id, 17) * 0.9,
@@ -155,6 +171,25 @@ function layoutPlanets(planets: RidgePlanet[]): { rows: PlanetLayout[]; outerEdg
     };
   });
   return { rows, outerEdge: cursor + previousFootprint + 1.2 };
+}
+
+function makePointSprite(): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 32;
+  const context = canvas.getContext("2d")!;
+  const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.34, "rgba(255,255,255,0.9)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 32, 32);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function usePointSprite() {
+  const sprite = useMemo(() => makePointSprite(), []);
+  useEffect(() => () => sprite.dispose(), [sprite]);
+  return sprite;
 }
 
 // ── Scene pieces ────────────────────────────────────────────────────────────
@@ -207,11 +242,10 @@ function Star({ theme, selected, onClick }: { theme: RidgeStarTheme; selected: b
   );
 }
 
-function Planet({ row, selected, onClick, keyLight, fontFamily }: {
+function Planet({ row, selected, onClick, fontFamily }: {
   row: PlanetLayout;
   selected: boolean;
   onClick: () => void;
-  keyLight: string;
   fontFamily: string;
 }) {
   const orbitRef = useRef<THREE.Group>(null);
@@ -255,16 +289,13 @@ function Planet({ row, selected, onClick, keyLight, fontFamily }: {
               <Satellites row={row} />
               <Html center position={[0, row.size + 0.5, 0]} style={{ pointerEvents: "none" }}>
                 <div style={{ color: "#f2f6ff", fontSize: 12, whiteSpace: "nowrap", fontFamily, textShadow: "0 1px 3px #01030a" }}>
-                  {row.planet.name} · {row.planet.memoryCount}
+                  {row.planet.name} · {row.memoryCount}
                 </div>
               </Html>
             </>
           )}
         </group>
       </group>
-      {/* keyLight tint is applied by the central point light; this keeps the
-          prop referenced for future per-planet shading parity. */}
-      <group userData={{ keyLight }} />
     </group>
   );
 }
@@ -283,7 +314,7 @@ function Satellites({ row }: { row: PlanetLayout }) {
         const angle = hash01(memory.id, 107) * Math.PI * 2;
         return (
           <mesh key={memory.id} position={[Math.cos(angle) * orbit, (hash01(memory.id, 13) - 0.5) * 0.16, Math.sin(angle) * orbit]} raycast={() => null}>
-            <sphereGeometry args={[0.05 + (memory.heat ?? 0.3) * 0.05, 10, 8]} />
+            <sphereGeometry args={[0.05 + (Number.isFinite(memory.heat) ? Math.min(1, Math.max(0, memory.heat!)) : 0.3) * 0.05, 10, 8]} />
             <meshBasicMaterial color="#e8ecf4" transparent opacity={0.85} />
           </mesh>
         );
@@ -294,11 +325,13 @@ function Satellites({ row }: { row: PlanetLayout }) {
 
 function Belt({ innerRadius, count, memoriesSeed }: { innerRadius: number; count: number; memoriesSeed: string[] }) {
   const groupRef = useRef<THREE.Group>(null);
+  const sprite = usePointSprite();
   useFrame((state) => {
     if (groupRef.current) groupRef.current.rotation.y = state.clock.elapsedTime * 0.012;
   });
   const [positions, colors] = useMemo(() => {
-    const total = count + memoriesSeed.length;
+    const safeCount = Number.isFinite(count) ? Math.min(5000, Math.max(0, Math.floor(count))) : 0;
+    const total = Math.min(5000, safeCount + memoriesSeed.length);
     const pos = new Float32Array(total * 3);
     const col = new Float32Array(total * 3);
     const warm = new THREE.Color("#c8a37a");
@@ -323,13 +356,14 @@ function Belt({ innerRadius, count, memoriesSeed }: { innerRadius: number; count
           <bufferAttribute attach="attributes-position" args={[positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[colors, 3]} />
         </bufferGeometry>
-        <pointsMaterial vertexColors size={0.16} sizeAttenuation transparent opacity={0.68} depthWrite={false} />
+        <pointsMaterial map={sprite} alphaTest={0.02} vertexColors size={0.16} sizeAttenuation transparent opacity={0.68} depthWrite={false} />
       </points>
     </group>
   );
 }
 
 function FarStars() {
+  const sprite = usePointSprite();
   const [positions, colors] = useMemo(() => {
     const count = 420;
     const pos = new Float32Array(count * 3);
@@ -352,8 +386,55 @@ function FarStars() {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
-      <pointsMaterial vertexColors size={0.5} sizeAttenuation transparent opacity={0.85} depthWrite={false} />
+      <pointsMaterial map={sprite} alphaTest={0.02} vertexColors size={0.5} sizeAttenuation transparent opacity={0.85} depthWrite={false} />
     </points>
+  );
+}
+
+function systemFitDistance(outerEdge: number, fov: number, width: number, height: number) {
+  const radius = Math.max(8, outerEdge + 3.2);
+  const verticalFov = THREE.MathUtils.degToRad(fov);
+  const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * (width / height));
+  const widthDistance = radius / Math.tan(horizontalFov / 2);
+  const projectedHeight = radius * 0.42 + 3;
+  const heightDistance = projectedHeight / Math.tan(verticalFov / 2);
+  return Math.max(widthDistance, heightDistance) * 1.12;
+}
+
+function FitSystemCamera({ outerEdge }: { outerEdge: number }) {
+  const { camera, size } = useThree();
+  useEffect(() => {
+    if (!(camera instanceof THREE.PerspectiveCamera) || !size.width || !size.height) return;
+    const distance = systemFitDistance(outerEdge, camera.fov, size.width, size.height);
+    camera.position.set(0.5, distance * 0.34, distance);
+    camera.near = Math.max(0.1, distance / 500);
+    camera.far = Math.max(220, distance * 8);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+  }, [camera, outerEdge, size.height, size.width]);
+  return null;
+}
+
+function SystemControls({ outerEdge }: { outerEdge: number }) {
+  const { camera, size } = useThree();
+  const fitDistance = camera instanceof THREE.PerspectiveCamera && size.width && size.height
+    ? systemFitDistance(outerEdge, camera.fov, size.width, size.height)
+    : 70;
+  return (
+    <OrbitControls
+      makeDefault
+      enableDamping
+      dampingFactor={0.055}
+      enablePan
+      screenSpacePanning={false}
+      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+      rotateSpeed={0.45}
+      zoomSpeed={0.72}
+      minDistance={4}
+      maxDistance={Math.max(70, fitDistance * 1.8)}
+      minPolarAngle={0.16}
+      maxPolarAngle={Math.PI * 0.48}
+    />
   );
 }
 
@@ -365,63 +446,61 @@ export default function NearFocus3D({
   onSelect,
   fontFamily = "ui-monospace, monospace",
 }: NearFocus3DProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<InternalSelection>(null);
   const { rows, outerEdge } = useMemo(() => layoutPlanets(snapshot.planets), [snapshot.planets]);
-  const beltSeeds = useMemo(() => snapshot.asteroids.map((m) => m.id), [snapshot.asteroids]);
+  const beltSeeds = useMemo(() => snapshot.asteroids.slice(0, 4500).map((m) => m.id), [snapshot.asteroids]);
+  const selectedPlanet = selection?.kind === "planet"
+    ? rows.find((row) => row.planet.id === selection.id) || null
+    : null;
 
-  const select = (next: string | null) => {
-    setSelectedId(next);
+  const select = (next: InternalSelection) => {
+    setSelection(next);
     if (!onSelect) return;
     if (next === null) onSelect(null);
-    else if (next === "star") onSelect({ kind: "star" });
+    else if (next.kind === "star") onSelect({ kind: "star" });
     else {
-      const hit = rows.find((r) => r.planet.id === next);
+      const hit = rows.find((r) => r.planet.id === next.id);
       if (hit) onSelect({ kind: "planet", planet: hit.planet });
     }
   };
 
+  useEffect(() => {
+    if (selection?.kind === "planet" && !selectedPlanet) {
+      setSelection(null);
+      onSelect?.(null);
+    }
+  }, [onSelect, selectedPlanet, selection]);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%", background: theme.background, fontFamily }}>
       <Canvas
+        dpr={[1, 2]}
         camera={{ position: [0.5, 10.6, 30.5], fov: 42, near: 0.1, far: 220 }}
         gl={{ antialias: true, alpha: false }}
         onCreated={({ gl }) => {
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 0.98;
-          gl.setClearColor(theme.background, 1);
         }}
         onPointerMissed={() => select(null)}
       >
+        <color attach="background" args={[theme.background]} />
+        <FitSystemCamera outerEdge={outerEdge} />
         <ambientLight intensity={0.12} />
         <pointLight color={theme.keyLight} intensity={60} distance={80} decay={2} />
         <FarStars />
-        <Star theme={theme} selected={selectedId === "star"} onClick={() => select(selectedId === "star" ? null : "star")} />
+        <Star theme={theme} selected={selection?.kind === "star"} onClick={() => select(selection?.kind === "star" ? null : { kind: "star" })} />
         {rows.map((row) => (
           <Planet
             key={row.planet.id}
             row={row}
-            selected={selectedId === row.planet.id}
-            onClick={() => select(selectedId === row.planet.id ? null : row.planet.id)}
-            keyLight={theme.keyLight}
+            selected={selection?.kind === "planet" && selection.id === row.planet.id}
+            onClick={() => select(selection?.kind === "planet" && selection.id === row.planet.id ? null : { kind: "planet", id: row.planet.id })}
             fontFamily={fontFamily}
           />
         ))}
         <Belt innerRadius={outerEdge + 1.4} count={500} memoriesSeed={beltSeeds} />
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.055}
-          enablePan
-          screenSpacePanning={false}
-          touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
-          rotateSpeed={0.45}
-          zoomSpeed={0.72}
-          minDistance={4}
-          maxDistance={70}
-          minPolarAngle={0.16}
-          maxPolarAngle={Math.PI * 0.48}
-        />
+        <SystemControls outerEdge={outerEdge} />
       </Canvas>
     </div>
   );

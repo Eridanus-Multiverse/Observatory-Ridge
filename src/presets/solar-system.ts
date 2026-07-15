@@ -1,4 +1,4 @@
-import type { RidgeSnapshot, RidgeStarTheme } from "../core/types";
+import type { RidgeSnapshot, RidgeStarTheme } from "../core/types.js";
 
 /**
  * The classic. Default face of Observatory Ridge — a warm G-type sun and the
