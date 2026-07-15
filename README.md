@@ -224,27 +224,35 @@ The bundled `SOLAR_STAR_THEME`, `BLUE_STAR_THEME`, and
 
 ## Install and use
 
-There is no published package or runnable demo in the current scaffold. To
-inspect the contracts and follow development:
-
-Clone the repository using the URL shown by your Git host, then install the
-declared dependencies:
+Requirements: Node 18+ and npm. Everything else installs locally.
 
 ```bash
 cd Observatory-Ridge
-npm install
+npm install    # pulls React, three.js, @react-three/fiber, @react-three/drei, Vite
+npm run demo   # opens the demo app (Galaxy View + Near Focus, synthetic data)
 ```
 
-The package reserves these commands for the first extracted preview:
+Other commands:
 
 ```bash
-npm run demo       # Vite demo application
 npm run typecheck  # TypeScript contract and component checks
 npm run build      # production demo build
 ```
 
-They should not be treated as release verification until the planned `demo`,
-entry point, TypeScript configuration, and component directories land.
+To embed the components in your own React app, install the peer dependencies
+(`react`, `react-dom`, `three`, `@react-three/fiber`, `@react-three/drei` —
+exact ranges in `package.json`) and import from `src/`:
+
+```tsx
+import GalaxyView from "observatory-ridge/src/galaxy-view/GalaxyView";
+import NearFocus2D from "observatory-ridge/src/near-focus-2d/NearFocus2D";
+
+<GalaxyView graph={yourGraph} />
+<NearFocus2D snapshot={yourSnapshot} />
+```
+
+No plugins, no build-time codegen, no service dependencies — the components
+render whatever JSON you hand them.
 
 While working from a source checkout, an adapter can already target the shared
 contract without coupling its private record shape to a renderer:
