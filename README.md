@@ -2,6 +2,13 @@
 
 Turn notes, memories, and relationships into an explorable star system.
 
+Most knowledge graphs look like wiring diagrams. This kit starts from a
+different question: what if the things you remember deserved a sky? Concepts
+become planets, memories orbit the ones they belong to, the unresolved ones
+drift in an asteroid belt — and when you step back far enough, everything
+you've written clusters into colored nebulae, like a galaxy that only you
+could have grown.
+
 Observatory Ridge is a backend-agnostic visualization toolkit for three related
 views of the same knowledge base:
 
