@@ -322,7 +322,7 @@ function NodePoints({ nodes, selId, connectedIds, community, palette, dustPerNod
             <bufferAttribute attach="attributes-position" args={[dustPositions, 3]} />
             <bufferAttribute attach="attributes-color" args={[dustColors, 3]} />
           </bufferGeometry>
-          <pointsMaterial map={sprite} vertexColors size={2.4} sizeAttenuation transparent opacity={0.85} depthWrite={false} blending={THREE.AdditiveBlending} />
+          <pointsMaterial map={sprite} vertexColors size={1.8} sizeAttenuation transparent opacity={0.7} depthWrite={false} blending={THREE.AdditiveBlending} />
         </points>
       )}
       <points>
@@ -330,7 +330,7 @@ function NodePoints({ nodes, selId, connectedIds, community, palette, dustPerNod
           <bufferAttribute attach="attributes-position" args={[positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[colors, 3]} />
         </bufferGeometry>
-        <pointsMaterial map={sprite} vertexColors size={4.6} sizeAttenuation transparent opacity={0.95} depthWrite={false} blending={THREE.AdditiveBlending} />
+        <pointsMaterial map={sprite} vertexColors size={3.6} sizeAttenuation transparent opacity={0.95} depthWrite={false} blending={THREE.AdditiveBlending} />
       </points>
     </>
   );
@@ -368,7 +368,7 @@ function EdgeLines({ nodes, edges, selId }: {
         <bufferAttribute attach="attributes-position" args={[geo.p, 3]} />
         <bufferAttribute attach="attributes-color" args={[geo.c, 3]} />
       </bufferGeometry>
-      <lineBasicMaterial vertexColors transparent opacity={hasSelection ? 0.7 : 0.85} blending={THREE.AdditiveBlending} />
+      <lineBasicMaterial vertexColors transparent opacity={hasSelection ? 0.5 : 0.3} blending={THREE.AdditiveBlending} />
     </lineSegments>
   );
 }
@@ -413,7 +413,7 @@ function FitCamera({ nodes }: { nodes: LayoutNode[] }) {
     for (const node of nodes) radius = Math.max(radius, Math.hypot(node.x, node.y, node.z));
     const verticalFov = THREE.MathUtils.degToRad(camera.fov);
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * (size.width / size.height));
-    const distance = (radius / Math.sin(Math.min(verticalFov, horizontalFov) / 2)) * 1.12;
+    const distance = (radius / Math.sin(Math.min(verticalFov, horizontalFov) / 2)) * 1.3;
     camera.position.set(0, distance * 0.28, distance);
     camera.near = Math.max(0.1, distance / 500);
     camera.far = Math.max(500, distance * 12);

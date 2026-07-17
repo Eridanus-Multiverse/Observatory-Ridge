@@ -52,7 +52,7 @@ export function demoGraph(): RidgeGraph {
   let serial = 0;
   for (const topic of TOPICS) {
     // ~60 memories per topic so communities form visible nebulae.
-    for (let i = 0; i < 60; i += 1) {
+    for (let i = 0; i < 36; i += 1) {
       serial += 1;
       const id = `demo-g-${serial}`;
       nodes.push({
@@ -87,10 +87,10 @@ export function demoGraph(): RidgeGraph {
       }
     }
   }
-  for (let b = 0; b < 40; b += 1) {
+  for (let b = 0; b < 18; b += 1) {
     const i = Math.floor(hash01(`bridge-${b}`, 3) * nodes.length);
     let j = Math.floor(hash01(`bridge-${b}`, 11) * nodes.length);
-    if (nodes[i].category === nodes[j].category) j = (j + 60 + (b % 5) * 60) % nodes.length;
+    if (nodes[i].category === nodes[j].category) j = (j + 36 + (b % 5) * 36) % nodes.length;
     addEdge(nodes[i].id, nodes[j].id, 0.25);
   }
   return { nodes, edges: [...edgeMap.values()] };
