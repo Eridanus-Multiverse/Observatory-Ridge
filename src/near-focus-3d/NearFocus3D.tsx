@@ -194,7 +194,7 @@ function usePointSprite() {
 
 // ── Scene pieces ────────────────────────────────────────────────────────────
 
-function Star({ theme, selected, onClick }: { theme: RidgeStarTheme; selected: boolean; onClick: () => void }) {
+function Star({ theme, onClick }: { theme: RidgeStarTheme; selected?: boolean; onClick: () => void }) {
   const surfaceRef = useRef<THREE.ShaderMaterial>(null);
   const haloRef = useRef<THREE.ShaderMaterial>(null);
   const uniforms = useMemo(() => ({
@@ -232,12 +232,8 @@ function Star({ theme, selected, onClick }: { theme: RidgeStarTheme; selected: b
         <sphereGeometry args={[1.9, 48, 32]} />
         <shaderMaterial ref={surfaceRef} uniforms={uniforms} vertexShader={STAR_VERTEX} fragmentShader={STAR_FRAGMENT} />
       </mesh>
-      {selected && (
-        <mesh raycast={() => null}>
-          <torusGeometry args={[2.5, 0.015, 8, 64]} />
-          <meshBasicMaterial color="#d9e8ff" transparent opacity={0.6} />
-        </mesh>
-      )}
+      {/* Star selection feedback is the detail panel plus the halo itself —
+          a Saturn-style ring on the star reads as a bug, not a highlight. */}
     </group>
   );
 }
@@ -282,7 +278,10 @@ function Planet({ row, selected, onClick, fontFamily }: {
           </mesh>
           {selected && (
             <>
-              <mesh raycast={() => null}>
+              {/* Torus lies in the XY plane by default (edge-on from the scene
+                  camera = a "vertical ring"); rotate it flat into the orbital
+                  plane so selection reads as a ground ring under the planet. */}
+              <mesh raycast={() => null} rotation={[Math.PI / 2, 0, 0]}>
                 <torusGeometry args={[row.size * 1.5, 0.012, 8, 48]} />
                 <meshBasicMaterial color="#d9e8ff" transparent opacity={0.55} />
               </mesh>
