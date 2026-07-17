@@ -22,3 +22,6 @@ export {
   SOLAR_STAR_THEME,
   solarSystemSnapshot,
 } from "./presets/solar-system.js";
+export { default as EchoStarmap } from "./echo-starmap/EchoStarmap";
+export { default as EchoGalaxy } from "./echo-galaxy/EchoGalaxy";
+export * from "./core/emotion-types";

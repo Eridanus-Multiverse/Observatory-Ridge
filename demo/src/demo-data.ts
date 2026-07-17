@@ -1,4 +1,5 @@
 import type { RidgeGraph, RidgeMemory, RidgeSnapshot } from "../../src/core/types";
+import type { EchoBond, EchoMoment, EchoSea } from "../../src/core/emotion-types";
 import { hash01 } from "../../src/core/hash";
 import { solarSystemSnapshot } from "../../src/presets/solar-system";
 
@@ -94,4 +95,51 @@ export function demoGraph(): RidgeGraph {
     addEdge(nodes[i].id, nodes[j].id, 0.25);
   }
   return { nodes, edges: [...edgeMap.values()] };
+}
+
+const MOOD_LABELS: Array<{ label: string; valence: number; arousal: number }> = [
+  { label: "Woke up before the alarm, no dread", valence: 0.55, arousal: 0.25 },
+  { label: "The deadline moved up a week", valence: -0.6, arousal: 0.85 },
+  { label: "Long call with an old friend", valence: 0.8, arousal: 0.45 },
+  { label: "Rain all day, stayed in", valence: 0.1, arousal: 0.1 },
+  { label: "Argued about nothing, regretted it", valence: -0.7, arousal: 0.7 },
+  { label: "Finished the hard chapter", valence: 0.7, arousal: 0.6 },
+  { label: "Couldn't sleep until 4am", valence: -0.45, arousal: 0.75 },
+  { label: "Found the café with the good window seat", valence: 0.65, arousal: 0.3 },
+  { label: "Waiting for results, stomach in knots", valence: -0.3, arousal: 0.8 },
+  { label: "A quiet, completely ordinary Tuesday", valence: 0.2, arousal: 0.15 },
+  { label: "They remembered my birthday", valence: 0.9, arousal: 0.65 },
+  { label: "Missed the train by ten seconds", valence: -0.5, arousal: 0.6 },
+];
+
+/** Synthetic month of moods for the Echo Sea views. Same determinism rule as
+ * the rest of the demo: everything derives from hash01, nothing is random. */
+export function demoSea(): EchoSea {
+  const moments: EchoMoment[] = [];
+  for (let i = 0; i < 46; i += 1) {
+    const id = `demo-e-${i + 1}`;
+    const mood = MOOD_LABELS[i % MOOD_LABELS.length];
+    const day = 1 + Math.floor(hash01(id, 3) * 28);
+    const jitterV = (hash01(id, 7) - 0.5) * 0.3;
+    const jitterA = (hash01(id, 13) - 0.5) * 0.2;
+    moments.push({
+      id,
+      date: `2026-07-${String(day).padStart(2, "0")}`,
+      valence: Math.max(-1, Math.min(1, mood.valence + jitterV)),
+      arousal: Math.max(0, Math.min(1, mood.arousal + jitterA)),
+      importance: 1 + Math.floor(hash01(id, 17) * 5),
+      heat: hash01(id, 21),
+      label: mood.label,
+      kind: hash01(id, 29) > 0.4 ? "event" : "memory",
+    });
+  }
+  const bonds: EchoBond[] = [];
+  for (let b = 0; b < 22; b += 1) {
+    const i = Math.floor(hash01(`demo-eb-${b}`, 5) * moments.length);
+    const j = Math.floor(hash01(`demo-eb-${b}`, 11) * moments.length);
+    if (i !== j) {
+      bonds.push({ source: moments[i].id, target: moments[j].id, strength: 0.3 + hash01(`demo-eb-${b}`, 19) * 0.6 });
+    }
+  }
+  return { moments, bonds };
 }
