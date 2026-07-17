@@ -39,7 +39,7 @@ export interface EchoGalaxyProps {
 
 const BACKGROUND = "#04030a";
 const LABEL_COUNT = 5;
-const FLARE_COUNT = 36;
+const FLARE_COUNT = 36; // hard cap; the actual tier scales with population below
 
 /**
  * Soft round sprite with a tight bright core. PITFALL: untextured Points
@@ -225,7 +225,7 @@ function MomentPoints({ moments, sprite, pixel }: { moments: LayoutMoment[]; spr
               <bufferAttribute attach="attributes-position" args={[bucket.pos, 3]} />
               <bufferAttribute attach="attributes-color" args={[bucket.halo, 3]} />
             </bufferGeometry>
-            <pointsMaterial map={pixelSprite} vertexColors size={1.1 + bucket.importance * 0.28} sizeAttenuation transparent opacity={0.95} depthWrite={false} alphaTest={0.4} />
+            <pointsMaterial map={pixelSprite} vertexColors size={1.6 + bucket.importance * 0.4} sizeAttenuation transparent opacity={1} depthWrite={false} alphaTest={0.4} />
           </points>
         ))}
       </>
@@ -533,11 +533,18 @@ export default function EchoGalaxy({
     return {
       moments: laid,
       bonds: safeBonds,
-      flares: bright.slice(0, FLARE_COUNT),
+      flares: bright.slice(0, Math.min(FLARE_COUNT, Math.max(3, Math.round(laid.length * 0.15)))),
       labeled: bright.slice(0, LABEL_COUNT),
       wells: laid.filter(isDarkWell),
     };
   }, [sea.moments, sea.bonds]);
+
+  // Pixel mode draws special tiers (neutron orbs, black holes) as meshes; their
+  // base squares must not show through behind them as four corners.
+  const ordinaryMoments = useMemo(() => {
+    const special = new Set([...flares, ...wells].map((moment) => moment.id));
+    return moments.filter((moment) => !special.has(moment.id));
+  }, [moments, flares, wells]);
 
   const selected = useMemo(
     () => moments.find((moment) => moment.id === selectedId) || null,
@@ -568,7 +575,7 @@ export default function EchoGalaxy({
       <Canvas dpr={[1, 2]} camera={{ position: [0, 12, 110], fov: 55, near: 0.1, far: 3000 }} style={{ background: BACKGROUND }}>
         <FitCamera moments={moments} />
         <BackgroundStars sprite={sprite} />
-        <MomentPoints moments={moments} sprite={sprite} pixel={!glowMode} />
+        <MomentPoints moments={glowMode ? moments : ordinaryMoments} sprite={sprite} pixel={!glowMode} />
         {/* Upstream never rendered bond lines — bonds only shape the spring layout. */}
         <Flares moments={flares} sprite={sprite} glow={glowMode} />
         <DarkWells moments={wells} glow={glowMode} />
