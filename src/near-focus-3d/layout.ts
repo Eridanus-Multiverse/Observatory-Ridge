@@ -225,14 +225,17 @@ function buildAsteroid(memory: RidgeMemory, innerBelt: number, outerBelt: number
   const radialSeed = hash01(key, 151);
   const inclinationSeed = hash01(key, 163);
   const inclinationDirection = hash01(key, 181) < 0.5 ? -1 : 1;
-  // Two-belt structure: hot memories settle in the inner belt, the rest in
-  // the cold outer belt, and a few strays drift across on high inclinations.
-  const beltCenter = memoryHeat(memory) >= 0.4 ? innerBelt : outerBelt;
+  // Single main belt, solar-system style (2026-07-17 field report): every
+  // unattributed memory lives in the reserved gap; a few strays drift wider
+  // on high inclinations. `outerBelt` stays in the signature for API
+  // stability but no longer hosts a second ring.
+  void outerBelt;
+  const beltCenter = innerBelt;
   return {
     memory,
     key,
     radius: scattered
-      ? innerBelt - 1.6 + radialSeed * (outerBelt - innerBelt + 3.2)
+      ? beltCenter - 2.4 + radialSeed * 5.2
       : beltCenter - 1.4 + radialSeed * 2.8,
     phase: hash01(key, 157) * TAU,
     inclination: scattered

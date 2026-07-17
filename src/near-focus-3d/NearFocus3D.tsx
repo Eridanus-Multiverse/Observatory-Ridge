@@ -881,12 +881,12 @@ function AsteroidBeltDust({
   outerBase: number;
 }) {
   const groupRef = useRef<THREE.Group>(null);
-  const outerRef = useRef<THREE.Group>(null);
-  const outerCenter = outerBase + 2.2;
+  // Single main belt, solar-system style (2026-07-17 field report) — the
+  // second Kuiper-style ring is gone; `outerBase` kept for API stability.
+  void outerBase;
 
   useFrame(() => {
     if (groupRef.current) groupRef.current.rotation.y = motionTime.current * 0.012;
-    if (outerRef.current) outerRef.current.rotation.y = motionTime.current * -0.007;
   });
 
   return (
@@ -901,19 +901,6 @@ function AsteroidBeltDust({
           colorA="#c8a37a"
           colorB="#8a715a"
           dotSize={0.16}
-          particleTexture={particleTexture}
-        />
-      </group>
-      <group ref={outerRef} raycast={() => null}>
-        <BeltDustCloud
-          prefix="belt-dust-outer"
-          center={outerCenter}
-          halfWidth={1.7}
-          thickness={1.1}
-          count={1340}
-          colorA="#8fa3bd"
-          colorB="#5d6a7e"
-          dotSize={0.2}
           particleTexture={particleTexture}
         />
       </group>

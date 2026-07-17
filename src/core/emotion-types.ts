@@ -56,15 +56,31 @@ export function clampImportance(i: number | undefined): number {
 }
 
 /**
- * Shared valence/arousal color ramp: dark violet (low valence) through calm
- * blue to warm gold (high valence); arousal saturates the tone. Both Echo
+ * Shared valence/arousal color ramp, ported verbatim from the upstream
+ * renderer: deep blue for the low days, grey-lavender around neutral, then
+ * burning through amber into red-hot for the bright ones. No green anywhere —
+ * moods don't come in green. Arousal adds heat to every band. Both Echo
  * renderers use this so a moment keeps its color across views.
  */
+export function echoColorRGB(valence: number, arousal: number): [number, number, number] {
+  const vv = clampValence(valence);
+  const aa = clampArousal(arousal);
+  if (vv < -0.5) return [0.3 + aa * 0.15, 0.35 + aa * 0.1, 0.9 + aa * 0.1];
+  if (vv < -0.15) {
+    const t = (vv + 0.5) / 0.35;
+    return [0.3 + t * 0.35 + aa * 0.1, 0.35 + t * 0.3 + aa * 0.1, 0.9 - t * 0.15];
+  }
+  if (vv < 0.15) return [0.65 + aa * 0.15, 0.65 + aa * 0.1, 0.75 + aa * 0.1];
+  if (vv < 0.5) {
+    const t = (vv - 0.15) / 0.35;
+    return [0.75 + t * 0.25, 0.65 - t * 0.2 + aa * 0.1, 0.55 - t * 0.3];
+  }
+  return [1.0, 0.4 + aa * 0.15, 0.15 + aa * 0.1];
+}
+
+/** CSS form of `echoColorRGB` for canvas renderers. */
 export function echoColor(valence: number, arousal: number): string {
-  const v = (clampValence(valence) + 1) / 2; // 0..1
-  const a = clampArousal(arousal);
-  const hue = 265 - v * 220; // 265 (violet) -> 45 (gold)
-  const sat = 35 + a * 45;
-  const light = 42 + v * 22;
-  return `hsl(${Math.round(hue)}, ${Math.round(sat)}%, ${Math.round(light)}%)`;
+  const [r, g, b] = echoColorRGB(valence, arousal);
+  const to255 = (x: number) => Math.round(Math.max(0, Math.min(1, x)) * 255);
+  return `rgb(${to255(r)}, ${to255(g)}, ${to255(b)})`;
 }

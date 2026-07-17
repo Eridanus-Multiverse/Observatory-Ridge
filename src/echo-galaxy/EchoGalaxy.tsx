@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import * as THREE from "three";
 import type { EchoMoment, EchoSea } from "../core/emotion-types.js";
-import { clampArousal, clampImportance, clampValence, echoColor } from "../core/emotion-types.js";
+import { clampArousal, clampImportance, clampValence, echoColorRGB } from "../core/emotion-types.js";
 import { hash01 } from "../core/hash.js";
 import {
   clampHeat,
@@ -66,9 +66,10 @@ function makeDotSprite(): THREE.Texture {
   return texture;
 }
 
-/** Shared hue for a moment — always the `echoColor` ramp, parsed once. */
-function momentColor(moment: EchoMoment): THREE.Color {
-  return new THREE.Color(echoColor(moment.valence, moment.arousal));
+/** Shared hue for a moment — the upstream valence/arousal ramp, verbatim. */
+function momentColor(moment: { valence: number; arousal: number }): THREE.Color {
+  const [r, g, b] = echoColorRGB(moment.valence, moment.arousal);
+  return new THREE.Color(r, g, b);
 }
 
 function isDarkWell(moment: EchoMoment): boolean {
@@ -161,7 +162,22 @@ function BackgroundStars({ sprite }: { sprite: THREE.Texture }) {
  * layer (production's two-pass glow). PointsMaterial has one size per draw,
  * so moments are bucketed by importance — five sizes, ten draw calls max.
  */
-function MomentPoints({ moments, sprite }: { moments: LayoutMoment[]; sprite: THREE.Texture }) {
+/** Pixel-mode square sprite, upstream style: one solid block, rest transparent. */
+function makePixelSprite(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(4, 4, 8, 8);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.generateMipmaps = false;
+  texture.minFilter = THREE.NearestFilter;
+  texture.magFilter = THREE.NearestFilter;
+  return texture;
+}
+
+function MomentPoints({ moments, sprite, pixel }: { moments: LayoutMoment[]; sprite: THREE.Texture; pixel: boolean }) {
   const buckets = useMemo(() => {
     const byImportance = new Map<number, LayoutMoment[]>();
     for (const moment of moments) {
@@ -195,6 +211,27 @@ function MomentPoints({ moments, sprite }: { moments: LayoutMoment[]; sprite: TH
       });
   }, [moments]);
 
+  const pixelSprite = useMemo(() => (pixel ? makePixelSprite() : null), [pixel]);
+  useEffect(() => () => pixelSprite?.dispose(), [pixelSprite]);
+
+  if (pixel && pixelSprite) {
+    // Upstream pixel face: one flat square layer per moment, no halo, no
+    // additive stacking — the quiet retro version of the same sky.
+    return (
+      <>
+        {buckets.map((bucket) => (
+          <points key={bucket.importance} raycast={() => null}>
+            <bufferGeometry>
+              <bufferAttribute attach="attributes-position" args={[bucket.pos, 3]} />
+              <bufferAttribute attach="attributes-color" args={[bucket.halo, 3]} />
+            </bufferGeometry>
+            <pointsMaterial map={pixelSprite} vertexColors size={1.1 + bucket.importance * 0.28} sizeAttenuation transparent opacity={0.95} depthWrite={false} alphaTest={0.4} />
+          </points>
+        ))}
+      </>
+    );
+  }
+
   return (
     <>
       {buckets.map((bucket) => {
@@ -223,38 +260,6 @@ function MomentPoints({ moments, sprite }: { moments: LayoutMoment[]; sprite: TH
 }
 
 /** Bonds as faint ties, each end tinted by its moment's hue. */
-function BondLines({ moments, bonds, selId }: {
-  moments: LayoutMoment[];
-  bonds: NormalizedBond[];
-  selId: string | null;
-}) {
-  const hasSelection = !!selId;
-  const geo = useMemo(() => {
-    const byId = new Map(moments.map((moment) => [moment.id, moment]));
-    const pos: number[] = [], col: number[] = [];
-    for (const bond of bonds) {
-      const a = byId.get(bond.source), b = byId.get(bond.target);
-      if (!a || !b) continue;
-      pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
-      const hot = selId !== null && (bond.source === selId || bond.target === selId);
-      const gain = hot ? 0.85 : (0.1 + bond.strength * 0.22) * (hasSelection ? 0.45 : 1);
-      const ca = momentColor(a), cb = momentColor(b);
-      col.push(ca.r * gain, ca.g * gain, ca.b * gain, cb.r * gain, cb.g * gain, cb.b * gain);
-    }
-    return { p: new Float32Array(pos), c: new Float32Array(col) };
-  }, [moments, bonds, selId, hasSelection]);
-  if (!geo.p.length) return null;
-  return (
-    <lineSegments raycast={() => null}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[geo.p, 3]} />
-        <bufferAttribute attach="attributes-color" args={[geo.c, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial vertexColors transparent opacity={hasSelection ? 0.55 : 0.35} blending={THREE.AdditiveBlending} />
-    </lineSegments>
-  );
-}
-
 /**
  * Flares: the brightest moments (importance*10 + heat) get layered sprite
  * halos — the sprite stand-in for bloom — with a slow heat-driven pulse.
@@ -378,7 +383,7 @@ function MomentLabels({ labeled, selected, fontFamily }: {
           <group key={moment.id} position={[moment.x, moment.y + 2.4, moment.z]}>
             <Html center distanceFactor={22} style={{ pointerEvents: "none" }}>
               <div style={{
-                color: isSel ? "rgba(232,238,248,0.85)" : echoColor(moment.valence, moment.arousal),
+                color: isSel ? "rgba(232,238,248,0.85)" : `#${momentColor(moment).getHexString()}`,
                 opacity: isSel ? 1 : 0.5,
                 fontSize: isSel ? 11 : 9,
                 fontFamily,
@@ -470,6 +475,7 @@ export default function EchoGalaxy({
   fontFamily = "ui-monospace, monospace",
   onSelect,
 }: EchoGalaxyProps) {
+  const [glowMode, setGlowMode] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -519,9 +525,9 @@ export default function EchoGalaxy({
       <Canvas dpr={[1, 2]} camera={{ position: [0, 12, 110], fov: 55, near: 0.1, far: 3000 }} style={{ background: BACKGROUND }}>
         <FitCamera moments={moments} />
         <BackgroundStars sprite={sprite} />
-        <MomentPoints moments={moments} sprite={sprite} />
-        <BondLines moments={moments} bonds={bonds} selId={selected?.id || null} />
-        <Flares moments={flares} sprite={sprite} />
+        <MomentPoints moments={moments} sprite={sprite} pixel={!glowMode} />
+        {/* Upstream never rendered bond lines — bonds only shape the spring layout. */}
+        {glowMode && <Flares moments={flares} sprite={sprite} />}
         <DarkWells moments={wells} />
         {selected && <HighlightGlow moment={selected} sprite={sprite} strong />}
         {hovered && <HighlightGlow moment={hovered} sprite={sprite} strong={false} />}
@@ -529,6 +535,26 @@ export default function EchoGalaxy({
         <PointerHandler moments={moments} onPick={pick} onHover={setHoveredId} />
         <OrbitControls enableDamping dampingFactor={0.05} rotateSpeed={0.2} zoomSpeed={0.4} minDistance={8} maxDistance={1200} autoRotate autoRotateSpeed={0.05} />
       </Canvas>
+      {/* Two faces of the same sky, upstream feature: the button names the one
+          you would switch to. */}
+      <button
+        type="button"
+        onClick={() => setGlowMode((v) => !v)}
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          background: "rgba(8,10,18,0.82)",
+          color: "#cdd8ea",
+          border: "1px solid rgba(205,216,238,0.25)",
+          padding: "4px 10px",
+          fontSize: 11,
+          fontFamily,
+          cursor: "pointer",
+        }}
+      >
+        {glowMode ? "\u25c6 PIXEL" : "\u2726 GLOW"}
+      </button>
     </div>
   );
 }
