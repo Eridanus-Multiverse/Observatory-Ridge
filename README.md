@@ -86,6 +86,8 @@ should produce the same scene until the data changes.
 | `src/near-focus-3d` | Preview | React Three Fiber star-system view with navigation and star/planet detail events; belt and satellites are visual-only. |
 | `src/near-focus-2d` | Available | SVG system map with the same selection semantics and data model. |
 | `src/galaxy-view` | Available | Community detection, force layout, graph rendering, and picking. |
+| `src/echo-starmap` | Available | Canvas month-sky of emotional moments: airglow nebulae, bond lines, affect-grid axes. |
+| `src/echo-galaxy` | Available | React Three Fiber emotion cloud: valence/arousal/time axes, dark wells, flares. |
 | `demo` | Available | Vite application with generated data and configurable themes. |
 
 The 2D and 3D near-focus views are peers, not separate products. They should
@@ -210,6 +212,38 @@ report the true count while returning only a small, redacted preview set.
 `source` ID, a `target` ID, and an optional `weight` from 0 through 1. Duplicate
 or self-referential edges should be normalized by the data adapter before
 rendering.
+
+### Echo Sea
+
+The Echo Sea views render how the days felt rather than what you know. Their
+contract lives in `src/core/emotion-types.ts`: an `EchoMoment` is one
+remembered point in time with an affect reading (`valence` -1..1,
+`arousal` 0..1, optional `importance` 1-5, `heat` 0..1, a short redacted
+`label`, and a `kind` of `event` or `memory`); `EchoBond`s link moments that
+belong together. Both renderers share the same valence/arousal color ramp, so
+a moment keeps its color whether it hangs in the 2D sky or drifts in the 3D
+cloud.
+
+```json
+{
+  "moments": [
+    {
+      "id": "m-1",
+      "date": "2026-07-03",
+      "valence": 0.7,
+      "arousal": 0.45,
+      "importance": 4,
+      "label": "Long call with an old friend",
+      "kind": "event"
+    }
+  ],
+  "bonds": [{ "source": "m-1", "target": "m-2", "strength": 0.6 }]
+}
+```
+
+As with the knowledge views, adapters normalize whatever the host records —
+diary entries, mood check-ins, message sentiment — into this shape; the
+renderers never fetch private data themselves.
 
 ### Theme
 
