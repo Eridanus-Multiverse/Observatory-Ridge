@@ -21,12 +21,11 @@ views of the same knowledge base:
 The visualizations consume plain JSON. They do not own a database, call a
 private API, or decide how an application authenticates its users.
 
-> **Development status:** data contract, hardened hash, Solar System preset,
-> Galaxy View, Near Focus 2D, and the runnable demo are in the tree. Near
-> Focus 3D ships as a preview subset (star shader with seam-safe halo, orbit
-> layout, star/planet picking, visual-only belt and satellites); bloom
-> post-processing, camera-follow navigation, belt/satellite detail events, and
-> per-planet surface shaders are still upstream and on the roadmap.
+> **Development status:** all six parts are in the tree and runnable from the
+> demo: the data contracts, hardened hash, Solar System preset, Galaxy View,
+> Near Focus 2D, the full Near Focus 3D (shader star, bloom, camera-follow
+> navigation, planet surfaces, memory moons, asteroid belts), and the Echo
+> Sea pair (2D starmap + 3D emotion galaxy).
 
 ## Design principles
 
@@ -83,7 +82,7 @@ should produce the same scene until the data changes.
 | --- | --- | --- |
 | `src/core` | Available | Shared TypeScript data contracts and deterministic visual utilities. |
 | `src/presets` | Available | Generic snapshots and themes, including the Solar System preset. |
-| `src/near-focus-3d` | Preview | React Three Fiber star-system view with navigation and star/planet detail events; belt and satellites are visual-only. |
+| `src/near-focus-3d` | Available | React Three Fiber star system: shader star with bloom, camera-follow navigation, archetype planet surfaces, memory moons, twin asteroid belts. |
 | `src/near-focus-2d` | Available | SVG system map with the same selection semantics and data model. |
 | `src/galaxy-view` | Available | Community detection, force layout, graph rendering, and picking. |
 | `src/echo-starmap` | Available | Canvas month-sky of emotional moments: airglow nebulae, bond lines, affect-grid axes. |
