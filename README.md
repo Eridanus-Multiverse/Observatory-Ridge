@@ -294,6 +294,30 @@ export function makeSnapshot(records: SourceRecord[]): RidgeSnapshot {
 Keep fetching, authorization, attribution, and redaction in the host
 application. Pass only the minimum display payload into a visualization.
 
+## Deploy the demo
+
+```bash
+npm run build:demo   # emits demo/dist with relative asset paths (base: "./")
+```
+
+`demo/dist` is a fully static site — no server code, no environment
+variables, no rewrite rules. Host it anywhere that can serve files:
+
+- **GitHub Pages**: `npx gh-pages -d demo/dist`, or a Pages workflow that
+  uploads `demo/dist`. The relative base means it works from a project
+  subpath (`user.github.io/repo/`) out of the box.
+- **Netlify / Vercel**: build command `npm run build:demo`, publish
+  directory `demo/dist`.
+- **Your own server**: copy the directory under any web root —
+  `rsync -a demo/dist/ server:/var/www/ridge/` — and serve it as plain
+  static files.
+
+The demo ships synthetic data only; deploying it publishes no personal
+content. When you wire the components to a real knowledge base, keep the
+adapter and its data source in your host application (see the section
+above) and deploy that application however you already deploy it — the
+components themselves stay a static dependency.
+
 ## Pitfall log
 
 These are implementation failures that look cosmetic at first and then consume
