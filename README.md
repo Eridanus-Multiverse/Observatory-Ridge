@@ -1,5 +1,7 @@
 # Observatory Ridge
 
+English | [简体中文](README.zh-CN.md)
+
 Turn notes, memories, and relationships into an explorable star system.
 
 Most knowledge graphs look like wiring diagrams. This kit starts from a
