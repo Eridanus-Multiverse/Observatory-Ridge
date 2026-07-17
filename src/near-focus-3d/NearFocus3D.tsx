@@ -1435,7 +1435,24 @@ export default function NearFocus3D({
   fontFamily = "ui-monospace, monospace",
 }: NearFocus3DProps) {
   const [selection, setSelection] = useState<InternalSelection>(null);
+  // Search chrome, ported from upstream: collapsed to a hand-drawn magnifier
+  // square, expanding into an input on tap ("small UI, silky expand").
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const layout = useMemo(() => buildNearFocusLayout(snapshot), [snapshot]);
+  const memoryTotal = useMemo(
+    () => snapshot.planets.reduce((sum, planet) => sum + Math.max(planet.memoryCount || 0, planet.memories?.length || 0), 0),
+    [snapshot],
+  );
+  const searchResults = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query) return [];
+    return layout.planets
+      .filter((node) => node.planet.name.toLocaleLowerCase().includes(query))
+      .slice(0, 7);
+  }, [layout, search]);
   const selectedPlanet = selection?.kind === "planet"
     ? layout.planets.find((node) => node.planet.id === selection.id) || null
     : null;
@@ -1490,6 +1507,160 @@ export default function NearFocus3D({
           onPick={select}
         />
       </Canvas>
+      {/* Info block, upstream layout: name, census, then a state-aware hint. */}
+      <div
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 12,
+          pointerEvents: "none",
+          color: "rgba(205,216,238,0.82)",
+          fontSize: 10,
+          lineHeight: 1.7,
+          letterSpacing: 0.6,
+          textShadow: "0 1px 3px rgba(1,3,10,0.9)",
+          maxWidth: "62%",
+        }}
+      >
+        <div style={{ color: "rgba(239,237,230,0.92)", fontSize: 11 }}>{snapshot.star.name}</div>
+        <div>
+          {layout.planets.length} planets · {memoryTotal} memories in orbit
+          {snapshot.asteroids.length ? ` · ${snapshot.asteroids.length} drifting stones` : ""}
+        </div>
+        <div style={{ opacity: 0.55 }}>
+          {selection?.kind === "planet"
+            ? "Tap empty space to return to the overview"
+            : selection?.kind === "star"
+              ? snapshot.star.definition || "The center of this collection"
+              : "Tap a planet · one finger orbits · pinch zooms"}
+        </div>
+      </div>
+      {/* Search, upstream design: a magnifier square that silkily expands. */}
+      <div style={{ position: "absolute", top: 10, right: 10, display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          <input
+            ref={searchInputRef}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => window.setTimeout(() => {
+              setSearchFocused(false);
+              if (!searchInputRef.current?.value) setSearchOpen(false);
+            }, 140)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && searchResults[0]) {
+                event.preventDefault();
+                select({ kind: "planet", id: searchResults[0].planet.id });
+                setSearch("");
+                setSearchFocused(false);
+                setSearchOpen(false);
+              } else if (event.key === "Escape") {
+                setSearch("");
+                setSearchFocused(false);
+                setSearchOpen(false);
+              }
+            }}
+            placeholder="Search planets"
+            aria-label="Search planets"
+            tabIndex={searchOpen ? 0 : -1}
+            style={{
+              width: searchOpen ? 148 : 0,
+              opacity: searchOpen ? 1 : 0,
+              transition: "width 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease",
+              background: "rgba(4,7,16,0.88)",
+              border: "1px solid rgba(205,216,238,0.22)",
+              borderRight: "none",
+              color: "#e8eef8",
+              fontSize: 11,
+              fontFamily,
+              padding: searchOpen ? "5px 8px" : "5px 0",
+              outline: "none",
+            }}
+          />
+          <button
+            type="button"
+            title={searchOpen ? "Close search" : "Search planets"}
+            aria-label={searchOpen ? "Close search" : "Search planets"}
+            aria-expanded={searchOpen}
+            onClick={() => {
+              if (searchOpen) {
+                setSearch("");
+                setSearchOpen(false);
+                setSearchFocused(false);
+              } else {
+                setSearchOpen(true);
+                window.setTimeout(() => searchInputRef.current?.focus(), 30);
+              }
+            }}
+            style={{
+              background: "rgba(4,7,16,0.88)",
+              border: "1px solid rgba(205,216,238,0.22)",
+              color: "rgba(205,216,238,0.85)",
+              width: 27,
+              height: 27,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              padding: 0,
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" aria-hidden="true">
+              <circle cx="6.4" cy="6.4" r="4.1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <line x1="9.6" y1="9.6" x2="13.2" y2="13.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </button>
+          {searchFocused && searchResults.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Planet search results"
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                right: 0,
+                minWidth: 175,
+                background: "rgba(4,7,16,0.94)",
+                border: "1px solid rgba(205,216,238,0.18)",
+                zIndex: 30,
+              }}
+            >
+              {searchResults.map((node) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selection?.kind === "planet" && selection.id === node.planet.id}
+                  key={node.planet.id}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    select({ kind: "planet", id: node.planet.id });
+                    setSearch("");
+                    setSearchFocused(false);
+                    setSearchOpen(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    width: "100%",
+                    background: "none",
+                    border: "none",
+                    borderBottom: "1px solid rgba(205,216,238,0.08)",
+                    color: "#cdd8ea",
+                    fontSize: 11,
+                    fontFamily,
+                    padding: "6px 9px",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <span>{node.planet.name}</span>
+                  <span style={{ opacity: 0.45 }}>{node.planet.memoryCount}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
