@@ -281,13 +281,20 @@ function Flares({ moments, sprite, glow }: { moments: LayoutMoment[]; sprite: TH
     }
   });
   if (!glow) {
-    // Upstream neutron-star pixel face: a faint additive orb and one flat ring.
+    // Upstream neutron-star pixel face: a faint additive orb and one flat
+    // ring, with the bright core dot inside — upstream gets that core from
+    // the base point cloud, but special moments are excluded from ours (their
+    // square corners peeked out), so the core rides in the group instead.
     return (
       <>
         {moments.map((moment) => {
           const color = momentColor(moment);
           return (
             <group key={moment.id} position={[moment.x, moment.y, moment.z]}>
+              <mesh raycast={() => null}>
+                <sphereGeometry args={[0.28, 10, 10]} />
+                <meshBasicMaterial color={new THREE.Color(0.85 + color.r * 0.6, 0.85 + color.g * 0.6, 0.85 + color.b * 0.6)} transparent opacity={0.95} depthWrite={false} />
+              </mesh>
               <mesh raycast={() => null}>
                 <sphereGeometry args={[0.6, 12, 12]} />
                 <meshBasicMaterial color={new THREE.Color(color.r * 1.5, color.g * 1.5, color.b * 1.5)} transparent opacity={0.3} blending={THREE.AdditiveBlending} depthWrite={false} />
