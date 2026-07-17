@@ -264,13 +264,14 @@ function MomentPoints({ moments, sprite, pixel }: { moments: LayoutMoment[]; spr
  * Flares: the brightest moments (importance*10 + heat) get layered sprite
  * halos — the sprite stand-in for bloom — with a slow heat-driven pulse.
  */
-function Flares({ moments, sprite }: { moments: LayoutMoment[]; sprite: THREE.Texture }) {
+function Flares({ moments, sprite, glow }: { moments: LayoutMoment[]; sprite: THREE.Texture; glow: boolean }) {
   const groups = useRef(new Map<string, THREE.Group>());
   const phases = useMemo(
     () => new Map(moments.map((moment) => [moment.id, hash01(moment.id, 17) * Math.PI * 2])),
     [moments],
   );
   useFrame(({ clock }) => {
+    if (!glow) return; // upstream pixel face does not pulse
     const t = clock.elapsedTime;
     for (const moment of moments) {
       const group = groups.current.get(moment.id);
@@ -279,6 +280,29 @@ function Flares({ moments, sprite }: { moments: LayoutMoment[]; sprite: THREE.Te
       group.scale.setScalar(1 + heat * 0.07 * Math.sin(t * (1.1 + heat) + phases.get(moment.id)!));
     }
   });
+  if (!glow) {
+    // Upstream neutron-star pixel face: a faint additive orb and one flat ring.
+    return (
+      <>
+        {moments.map((moment) => {
+          const color = momentColor(moment);
+          return (
+            <group key={moment.id} position={[moment.x, moment.y, moment.z]}>
+              <mesh raycast={() => null}>
+                <sphereGeometry args={[0.6, 12, 12]} />
+                <meshBasicMaterial color={new THREE.Color(color.r * 1.5, color.g * 1.5, color.b * 1.5)} transparent opacity={0.3} blending={THREE.AdditiveBlending} depthWrite={false} />
+              </mesh>
+              <mesh raycast={() => null}>
+                <ringGeometry args={[1.2, 1.5, 32]} />
+                <meshBasicMaterial color={color} transparent opacity={0.12} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
+              </mesh>
+            </group>
+          );
+        })}
+      </>
+    );
+  }
+
   return (
     <>
       {moments.map((moment) => {
@@ -315,8 +339,27 @@ function Flares({ moments, sprite }: { moments: LayoutMoment[]; sprite: THREE.Te
  * black core with tilted, low-saturation rings. No additive blending here
  * on purpose; a black hole that glows is just a purple star.
  */
-function DarkWells({ moments }: { moments: LayoutMoment[] }) {
+function DarkWells({ moments, glow }: { moments: LayoutMoment[]; glow: boolean }) {
   if (!moments.length) return null;
+  if (!glow) {
+    // Upstream black-hole pixel face: a small black orb and a dim violet torus.
+    return (
+      <>
+        {moments.map((moment) => (
+          <group key={moment.id} position={[moment.x, moment.y, moment.z]}>
+            <mesh raycast={() => null}>
+              <sphereGeometry args={[0.4, 12, 12]} />
+              <meshBasicMaterial color="#000000" transparent opacity={0.9} />
+            </mesh>
+            <mesh raycast={() => null}>
+              <torusGeometry args={[1.8, 0.15, 8, 32]} />
+              <meshBasicMaterial color={new THREE.Color(0.4, 0.3, 0.8)} transparent opacity={0.15} blending={THREE.AdditiveBlending} depthWrite={false} />
+            </mesh>
+          </group>
+        ))}
+      </>
+    );
+  }
   return (
     <>
       {moments.map((moment) => {
@@ -527,8 +570,8 @@ export default function EchoGalaxy({
         <BackgroundStars sprite={sprite} />
         <MomentPoints moments={moments} sprite={sprite} pixel={!glowMode} />
         {/* Upstream never rendered bond lines — bonds only shape the spring layout. */}
-        {glowMode && <Flares moments={flares} sprite={sprite} />}
-        <DarkWells moments={wells} />
+        <Flares moments={flares} sprite={sprite} glow={glowMode} />
+        <DarkWells moments={wells} glow={glowMode} />
         {selected && <HighlightGlow moment={selected} sprite={sprite} strong />}
         {hovered && <HighlightGlow moment={hovered} sprite={sprite} strong={false} />}
         <MomentLabels labeled={labeled} selected={selected} fontFamily={fontFamily} />
